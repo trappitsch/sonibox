@@ -20,6 +20,9 @@ int current_volume = 10;
 
 
 void setup() {
+  // anlog read
+  analogReadResolution(12);  // 4096
+
   // Serial for printing
   Serial.begin(115200);
   if (debug) {
@@ -79,8 +82,7 @@ void loop() {
     bck_button_short_pressed();
   }
 
-  int volume_value = analogRead(pin_volume);
-  adjust_volume(volume_value);
+  adjust_volume();
 
   if (reader.PICC_IsNewCardPresent()) {
     card_present = true;
@@ -123,6 +125,7 @@ void set_figure() {
   if (debug) {
       Serial.print("Current card ID: "); Serial.println(current_card_id);
   }
+  play_folder = 0;
   for (int it = 0; it < num_of_figures; it++) {
     if (figure_mapping[it][0] == current_card_id) {
       play_folder = figure_mapping[it][1];
@@ -133,8 +136,10 @@ void set_figure() {
     Serial.print("Play folder number: "); Serial.println(play_folder);
   }
   // now play the music
-  is_play = true;
-  Mp3Player.loopFolder(play_folder);
+  if (play_folder > 0) {
+    is_play = true;
+    Mp3Player.loopFolder(play_folder);
+  }
 }
 
 unsigned long get_card_id(){
@@ -150,25 +155,30 @@ unsigned long get_card_id(){
   return hex_num;
 }
 
-void adjust_volume(int pot_value) {
+void adjust_volume() {
   // Todo: proper calcualtion of the volume according to the voltage divider
-  float tmp = float(pot_value) / 800.0 * 30.0;
+  int pot_value = analogReadMilliVolts(pin_volume);
+
+  float tmp = float(pot_value) / vol_mv_max * max_volume;
   int new_volume = int(tmp);
   if (debug_volume) {
     Serial.print("Pot value: ");
     Serial.println(pot_value);
     Serial.print("Current volume: ");
     Serial.println(current_volume);
+    Serial.print("tmp: ");
+    Serial.println(tmp);
     Serial.println();
     delay(200);
   }
-  if (new_volume != current_volume) {
+  int new_volume_int = int(new_volume);
+  if (new_volume_int != current_volume) {
     if (debug) {
       Serial.print("Volume adjusted to ");
-      Serial.println(new_volume);
+      Serial.println(new_volume_int);
     }
-    Mp3Player.volume(new_volume);
-    current_volume = new_volume;
+    Mp3Player.volume(new_volume_int);
+    current_volume = new_volume_int;
   }
 }
 
@@ -203,6 +213,9 @@ void bck_button_long_pressed() {
 }
 
 void bck_button_short_pressed() {
+  if (debug) {
+    Serial.println("Back button short pressed.");
+  }
   if (is_play) {
     Mp3Player.previous();
   }
@@ -215,6 +228,9 @@ void fwd_button_long_pressed() {
 }
 
 void fwd_button_short_pressed() {
+  if (debug) {
+    Serial.println("Forward button short pressed.");
+  }
   if (is_play) {
     Mp3Player.next();
   }
