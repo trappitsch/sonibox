@@ -66,6 +66,6 @@ async fn main(spawner: Spawner) {
     loop {
         // Main loop can handle other tasks or just sleep
         embassy_time::Timer::after(embassy_time::Duration::from_secs(1)).await;
-        PLAYER_CMD_CHANNEL.sender().send(player::PlayerCommand::Play).await;
+        // PLAYER_CMD_CHANNEL.sender().send(player::PlayerCommand::Play).await;
     }
 }
