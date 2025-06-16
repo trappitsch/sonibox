@@ -27,6 +27,7 @@ use rfid::rfid_task;
 mod buttons;
 mod player;
 mod rfid;
+mod tags;
 
 bind_interrupts!(pub struct Irqs {
     UART0_IRQ => BufferedInterruptHandler<UART0>;
