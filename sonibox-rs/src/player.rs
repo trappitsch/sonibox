@@ -5,15 +5,20 @@ use dfplayer_async::{Command, DfPlayer, MessageData, PlayBackMode, TimeSource};
 use embassy_rp::{peripherals as p, uart::BufferedUart};
 use embassy_sync::{
     blocking_mutex::raw::ThreadModeRawMutex,
-    channel::{Channel, Receiver, Sender},
+    channel::{Channel, Sender},
 };
 use embassy_time::{Delay, Duration, Instant, Timer};
 
+use crate::leds::{LED_CMD_CHANNEL, LedCommand};
+
 pub type PlayerCmdChannel = Channel<ThreadModeRawMutex, PlayerCommand, 16>;
 pub type PlayerCmdSender = Sender<'static, ThreadModeRawMutex, PlayerCommand, 16>;
-pub type PlayerCmdReceiver = Receiver<'static, ThreadModeRawMutex, PlayerCommand, 16>;
 pub static PLAYER_CMD_CHANNEL: PlayerCmdChannel = Channel::new();
 
+// A channel that will send the player status. To request it, send a playercommand
+pub static PLAYER_STAT_CHANNEL: Channel<ThreadModeRawMutex, PlayerStatus, 16> = Channel::new();
+
+#[derive(Debug)]
 pub enum PlayerCommand {
     PlayFolder(u8), // Play a specific folder
     PlayPause,      // Just play after a pause
@@ -22,10 +27,11 @@ pub enum PlayerCommand {
     Previous,       // Play the previous track
     VolumeUp,       // Increase volume
     VolumeDown,     // Decrease volume
+    GetStatus,      // Get the player to emit a PLAYER_STAT_CHANNEL signal
 }
 
-#[derive(Debug, PartialEq)]
-enum PlayerStatus {
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub enum PlayerStatus {
     Playing, // can be paused (button) or stopped (remove figure)
     Paused,  // playback is paused but figure is still present
     Stopped, // playback is stopped because there is no figure
@@ -55,15 +61,11 @@ impl Volume {
 }
 
 impl PlayerStatus {
-    fn is_paused(&self) -> bool {
-        self == &PlayerStatus::Paused
-    }
-
-    fn is_playing(&self) -> bool {
+    pub fn is_playing(&self) -> bool {
         self == &PlayerStatus::Playing
     }
 
-    fn is_stopped(&self) -> bool {
+    pub fn is_stopped(&self) -> bool {
         self == &PlayerStatus::Stopped
     }
 
@@ -96,9 +98,9 @@ impl TimeSource for MyTimeSource {
 }
 
 #[embassy_executor::task]
-pub async fn player_task(mut uart: BufferedUart<'static, p::UART0>, receiver: PlayerCmdReceiver) {
+pub async fn player_task(mut uart: BufferedUart<'static, p::UART0>) {
     // configuration for DFPlayer
-    let feedback_enable = false;
+    let feedback_enable = true;
     let timeout_ms = 1000;
     let delay = Delay;
     let reset_during_override = None;
@@ -107,6 +109,7 @@ pub async fn player_task(mut uart: BufferedUart<'static, p::UART0>, receiver: Pl
 
     let mut player_status = PlayerStatus::Stopped;
 
+    info!("Initializing DFPlayer Mini...");
     let mut dfplayer = match DfPlayer::try_new(
         &mut uart,
         feedback_enable,
@@ -119,44 +122,44 @@ pub async fn player_task(mut uart: BufferedUart<'static, p::UART0>, receiver: Pl
     {
         Ok(dfplayer) => dfplayer,
         Err(e) => {
-            // FIXME: This needs to be handled differently for prod.
             error!(
                 "Failed to initialize DFPlayer Mini: {:?}.",
                 Debug2Format(&e)
             );
+            LED_CMD_CHANNEL.send(LedCommand::Error).await;
             return;
         }
     };
+    info!("DFPlayer Mini initialized successfully.");
 
     Timer::after(Duration::from_millis(100)).await; // give some time to the player to settle
 
     // set the player into loop tracks in folder mode
     // HACK: This is a total workaround and should be implemented in the library properly...
-    let cmd = Command::PlayLoopTrack;
-    let message_data = MessageData::new(cmd, 0, PlayBackMode::FolderRepeat as u8);
-    match dfplayer.send_command(message_data).await {
-        Ok(_) => info!("Set player to loop tracks in folder mode."),
-        Err(e) => {
-            error!(
-                "Failed to set player to loop tracks: {:?}",
-                Debug2Format(&e)
-            );
-            return;
-        }
-    }
+    // let cmd = Command::PlayLoopTrack;
+    // let message_data = MessageData::new(cmd, 0, PlayBackMode::FolderRepeat as u8);
+    // match dfplayer.send_command(message_data).await {
+    //     Ok(_) => info!("Set player to loop tracks in folder mode."),
+    //     Err(e) => {
+    //         error!(
+    //             "Failed to set player to loop tracks: {:?}",
+    //             Debug2Format(&e)
+    //         );
+    //     }
+    // }
 
     // Set up volume to intialize the player with
     match dfplayer.set_volume(volume.current).await {
         Ok(_) => info!("Standard volume set: {}", volume.current),
         Err(e) => {
             error!("Failed to set volume: {:?}", Debug2Format(&e));
-            return;
         }
     }
 
     // loop and wait for command from other places...
+    info!("Entering player loop...");
     loop {
-        match receiver.receive().await {
+        match PLAYER_CMD_CHANNEL.receive().await {
             PlayerCommand::PlayPause => match player_status {
                 PlayerStatus::Paused => {
                     player_status.play();
@@ -201,7 +204,14 @@ pub async fn player_task(mut uart: BufferedUart<'static, p::UART0>, receiver: Pl
             }
             PlayerCommand::PlayFolder(folder) => {
                 player_status.play();
-                match dfplayer.play_from_folder(folder, 1).await {
+                // match dfplayer.play_from_folder(folder, 1).await {
+                //     Ok(_) => info!("Playing folder {}.", folder),
+                //     Err(e) => error!("Failed to play folder {}: {:?}", folder, Debug2Format(&e)),
+                // }
+                match dfplayer
+                    .send_command_init(MessageData::new(Command::PlayLoopFolder, 0, folder))
+                    .await
+                {
                     Ok(_) => info!("Playing folder {}.", folder),
                     Err(e) => error!("Failed to play folder {}: {:?}", folder, Debug2Format(&e)),
                 }
@@ -213,7 +223,6 @@ pub async fn player_task(mut uart: BufferedUart<'static, p::UART0>, receiver: Pl
                         Ok(_) => info!("Volume increased to: {}", volume.current),
                         Err(e) => {
                             error!("Failed to set volume: {:?}", Debug2Format(&e));
-                            return;
                         }
                     }
                 } else {
@@ -227,12 +236,14 @@ pub async fn player_task(mut uart: BufferedUart<'static, p::UART0>, receiver: Pl
                         Ok(_) => info!("Volume decreased to: {}", volume.current),
                         Err(e) => {
                             error!("Failed to set volume: {:?}", Debug2Format(&e));
-                            return;
                         }
                     }
                 } else {
                     info!("Player is not playing, volume decrease ignored.");
                 }
+            }
+            PlayerCommand::GetStatus => {
+                PLAYER_STAT_CHANNEL.send(player_status).await;
             }
         }
     }

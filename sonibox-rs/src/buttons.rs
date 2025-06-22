@@ -5,7 +5,7 @@ use embassy_futures::select::{select, select3};
 use embassy_rp::gpio::{Input, Level};
 use embassy_time::{Duration, Timer};
 
-use crate::player::{PlayerCmdSender, PlayerCommand};
+use crate::{player::{PlayerCmdSender, PlayerCommand, PLAYER_CMD_CHANNEL}, sleep::{AwakeCmd, AWAKE_SIGNAL}};
 
 const DEBOUNCE_DURATION: Duration = Duration::from_millis(100);
 const SECONDARY_ACTION_TIMEOUT: Duration = Duration::from_secs(1);
@@ -24,10 +24,10 @@ struct DualUseButton<'a> {
 }
 
 impl<'a> DualUseButton<'a> {
-    pub fn new(input: Input<'a>, sender: PlayerCmdSender, button_type: ButtonType) -> Self {
+    pub fn new(input: Input<'a>, button_type: ButtonType) -> Self {
         Self {
             input,
-            sender,
+            sender: PLAYER_CMD_CHANNEL.sender(),
             button_type,
         }
     }
@@ -108,12 +108,13 @@ pub async fn button_task(
     btn_previous_inp: Input<'static>,
     btn_play_inp: Input<'static>,
     btn_next_inp: Input<'static>,
-    sender: PlayerCmdSender,
 ) {
-    let mut btn_previous = DualUseButton::new(btn_previous_inp, sender, ButtonType::Previous);
-    let mut btn_play = DualUseButton::new(btn_play_inp, sender, ButtonType::PlayPause);
-    let mut btn_next = DualUseButton::new(btn_next_inp, sender, ButtonType::Next);
+    let mut btn_previous = DualUseButton::new(btn_previous_inp, ButtonType::Previous);
+    let mut btn_play = DualUseButton::new(btn_play_inp, ButtonType::PlayPause);
+    let mut btn_next = DualUseButton::new(btn_next_inp, ButtonType::Next);
+    info!("Starting button task loop...");
     loop {
         select3(btn_previous.action(), btn_play.action(), btn_next.action()).await;
+        AWAKE_SIGNAL.signal(AwakeCmd::StayAwake);
     }
 }

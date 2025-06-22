@@ -3,6 +3,7 @@
 
 use core::cell::RefCell;
 
+use defmt::error;
 use embassy_executor::Spawner;
 use embassy_rp::{
     bind_interrupts,
@@ -17,6 +18,7 @@ use embassy_rp::{
 use embassy_sync::blocking_mutex::{Mutex, raw::NoopRawMutex};
 
 use defmt_rtt as _;
+use leds::{LED_CMD_CHANNEL, Leds, led_task};
 use panic_probe as _;
 use static_cell::StaticCell;
 
@@ -25,8 +27,10 @@ use player::{PLAYER_CMD_CHANNEL, player_task};
 use rfid::rfid_task;
 
 mod buttons;
+mod leds;
 mod player;
 mod rfid;
+mod sleep;
 mod tags;
 
 bind_interrupts!(pub struct Irqs {
@@ -41,6 +45,13 @@ static RX_BUF: StaticCell<[u8; 128]> = StaticCell::new();
 #[embassy_executor::main]
 async fn main(spawner: Spawner) {
     let p = embassy_rp::init(Config::default());
+
+    // set up the LEDs
+    let leds = Leds::new(
+        Output::new(p.PIN_11, Level::Low),
+        Output::new(p.PIN_12, Level::Low),
+        Output::new(p.PIN_13, Level::Low),
+    );
 
     // set up buttons
     let btn_previous = Input::new(p.PIN_18, Pull::Up);
@@ -77,18 +88,24 @@ async fn main(spawner: Spawner) {
     let spi_blocking = Spi::new_blocking(p.SPI0, clk, copi, cipo, spi::Config::default());
     let spi_bus: SpiBusType = Mutex::new(RefCell::new(spi_blocking));
 
-    spawner.must_spawn(player_task(uart, PLAYER_CMD_CHANNEL.receiver()));
+    spawner.must_spawn(led_task(leds));
+    spawner.must_spawn(player_task(uart));
     spawner.must_spawn(button_task(
         btn_previous,
         btn_play,
         btn_next,
+    ));
+    spawner.must_spawn(rfid_task(
+        spi_bus,
+        touch_cs_out,
         PLAYER_CMD_CHANNEL.sender(),
     ));
-    spawner.must_spawn(rfid_task(spi_bus, touch_cs_out, PLAYER_CMD_CHANNEL.sender()));
+
+    let mut sleep_timer = sleep::SleepTimer::new();
 
     loop {
-        // Main loop can handle other tasks or just sleep
-        embassy_time::Timer::after(embassy_time::Duration::from_millis(500)).await;
+        sleep_timer.wait().await; // this should never return unless something went bad...
+        error!("The sleep timer wait loop terminated. This should not happen.");
+        LED_CMD_CHANNEL.send(leds::LedCommand::Error).await;
     }
 }
-

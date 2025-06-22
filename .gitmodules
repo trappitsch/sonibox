@@ -1,0 +1,3 @@
+[submodule "dfplayer-async"]
+	path = dfplayer-async
+	url = git@github.com:trappitsch/dfplayer-async.git

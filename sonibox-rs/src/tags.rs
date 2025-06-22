@@ -1,6 +1,6 @@
 //! Set up all the RFID tags for the application that we need to check for.
 
-/// These are all the tags that are set up. 
+/// These are all the tags that are set up.
 ///
 /// Unique tags, in order of folder, must come first. For all additinal tags at the end of the
 /// list, the folder selection will wrap around.
