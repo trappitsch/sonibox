@@ -1,7 +1,7 @@
 //! Player module for handling playback-related functionality.
 
 use defmt::{Debug2Format, error, info};
-use dfplayer_async::{Command, DfPlayer, MessageData, PlayBackMode, TimeSource};
+use dfplayer_async::{DfPlayer, TimeSource};
 use embassy_rp::{peripherals as p, uart::BufferedUart};
 use embassy_sync::{
     blocking_mutex::raw::ThreadModeRawMutex,
@@ -134,20 +134,6 @@ pub async fn player_task(mut uart: BufferedUart<'static, p::UART0>) {
 
     Timer::after(Duration::from_millis(100)).await; // give some time to the player to settle
 
-    // set the player into loop tracks in folder mode
-    // HACK: This is a total workaround and should be implemented in the library properly...
-    // let cmd = Command::PlayLoopTrack;
-    // let message_data = MessageData::new(cmd, 0, PlayBackMode::FolderRepeat as u8);
-    // match dfplayer.send_command(message_data).await {
-    //     Ok(_) => info!("Set player to loop tracks in folder mode."),
-    //     Err(e) => {
-    //         error!(
-    //             "Failed to set player to loop tracks: {:?}",
-    //             Debug2Format(&e)
-    //         );
-    //     }
-    // }
-
     // Set up volume to intialize the player with
     match dfplayer.set_volume(volume.current).await {
         Ok(_) => info!("Standard volume set: {}", volume.current),
@@ -204,16 +190,10 @@ pub async fn player_task(mut uart: BufferedUart<'static, p::UART0>) {
             }
             PlayerCommand::PlayFolder(folder) => {
                 player_status.play();
-                // match dfplayer.play_from_folder(folder, 1).await {
-                //     Ok(_) => info!("Playing folder {}.", folder),
-                //     Err(e) => error!("Failed to play folder {}: {:?}", folder, Debug2Format(&e)),
-                // }
-                match dfplayer
-                    .send_command_init(MessageData::new(Command::PlayLoopFolder, 0, folder))
-                    .await
-                {
+                info!{"Playing folder {}.", folder};
+                match dfplayer.play_loop_folder(folder).await {
                     Ok(_) => info!("Playing folder {}.", folder),
-                    Err(e) => error!("Failed to play folder {}: {:?}", folder, Debug2Format(&e)),
+                    Err(e) => error!("Failed to play folder {}: {:?}.", folder, Debug2Format(&e)),
                 }
             }
             PlayerCommand::VolumeUp => {

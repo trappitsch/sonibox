@@ -294,7 +294,6 @@ dependencies = [
 name = "dfplayer-async"
 version = "0.3.0"
 dependencies = [
- "defmt 1.0.1",
  "embedded-hal-async",
  "embedded-io-async",
 ]
