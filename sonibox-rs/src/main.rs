@@ -49,14 +49,14 @@ async fn main(spawner: Spawner) {
     // set up the LEDs
     let leds = Leds::new(
         Output::new(p.PIN_11, Level::Low),
-        Output::new(p.PIN_12, Level::Low),
         Output::new(p.PIN_13, Level::Low),
+        Output::new(p.PIN_15, Level::Low),
     );
 
     // set up buttons
-    let btn_previous = Input::new(p.PIN_18, Pull::Up);
-    let btn_play = Input::new(p.PIN_19, Pull::Up);
-    let btn_next = Input::new(p.PIN_20, Pull::Up);
+    let btn_previous = Input::new(p.PIN_10, Pull::Up);
+    let btn_play = Input::new(p.PIN_12, Pull::Up);
+    let btn_next = Input::new(p.PIN_14, Pull::Up);
 
     // set up UART for the DFPlayer
     let mut uart_config = UartConfig::default();

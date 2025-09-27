@@ -292,8 +292,11 @@ dependencies = [
 
 [[package]]
 name = "dfplayer-async"
-version = "0.3.0"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e9799b4fd632b9990f81b6b7fd39eda3555275c8d7d22645070dec8779e5ddbe"
 dependencies = [
+ "defmt 1.0.1",
  "embedded-hal-async",
  "embedded-io-async",
 ]

@@ -44,7 +44,7 @@ struct Volume {
 
 impl Volume {
     fn new() -> Self {
-        Self { current: 7 }
+        Self { current: 15 }
     }
 
     fn increase_volume(&mut self) {
@@ -110,7 +110,7 @@ pub async fn player_task(mut uart: BufferedUart<'static, p::UART0>) {
     let mut player_status = PlayerStatus::Stopped;
 
     info!("Initializing DFPlayer Mini...");
-    let mut dfplayer = match DfPlayer::try_new(
+    let mut dfplayer = match DfPlayer::new(
         &mut uart,
         feedback_enable,
         timeout_ms,
