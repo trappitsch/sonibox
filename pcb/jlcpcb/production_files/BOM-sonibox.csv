@@ -1,0 +1,17 @@
+Comment,Designator,Footprint,LCSC,Quantity
+500,R6,R_Axial_DIN0207_L6.3mm_D2.5mm_P10.16mm_Horizontal,,1
+1k,R1,R_Axial_DIN0207_L6.3mm_D2.5mm_P10.16mm_Horizontal,,1
+22112042,J5,CONN_A-6373-04A_MOL,,1
+22112022,J7,CONN_A-6373-02A_MOL,,1
+RFID Reader,J1,SAMTEC_TS-108-X-A-1,,1
+22112022,J2,CONN_A-6373-02A_MOL,,1
+1k,R3,R_Axial_DIN0207_L6.3mm_D2.5mm_P10.16mm_Horizontal,,1
+500,R2,R_Axial_DIN0207_L6.3mm_D2.5mm_P10.16mm_Horizontal,,1
+DFR0299,U1,MODULE_DFR0299,,1
+22112042,J3,CONN_A-6373-04A_MOL,,1
+22112022,J6,CONN_A-6373-02A_MOL,,1
+22112042,J4,CONN_A-6373-04A_MOL,,1
+1k,R5,R_Axial_DIN0207_L6.3mm_D2.5mm_P10.16mm_Horizontal,,1
+RaspberryPi_Pico,A1,RaspberryPi_Pico_Common_Unspecified,,1
+1N5817,D1,D_DO-41_SOD81_P10.16mm_Horizontal,,1
+500,R4,R_Axial_DIN0207_L6.3mm_D2.5mm_P10.16mm_Horizontal,,1

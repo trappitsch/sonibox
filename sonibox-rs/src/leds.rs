@@ -1,10 +1,7 @@
 //! This handles the LEDs
 
 use embassy_rp::gpio::Output;
-use embassy_sync::{
-    blocking_mutex::raw::ThreadModeRawMutex,
-    channel::Channel,
-};
+use embassy_sync::{blocking_mutex::raw::ThreadModeRawMutex, channel::Channel};
 use embassy_time::{Duration, Timer};
 
 const DIT_MS: u64 = 250;
@@ -13,8 +10,13 @@ const DAH: Duration = Duration::from_millis(3 * DIT_MS);
 
 #[derive(Debug)]
 pub enum LedCommand {
-    Error,      // SOS pattern on all LEDs
+    AllOn, // All LEDs on
+    OnlyPlay, // Only play LED on
+    InvalidCommand, // SOS once
     Off,
+    VolumeUp,
+    VolumeDown,
+    Error, // SOS pattern on all LEDs
 }
 
 pub type LedCmdChannel = Channel<ThreadModeRawMutex, LedCommand, 16>;
@@ -55,21 +57,21 @@ impl<'a> Leds<'a> {
             self.all_off();
             Timer::after(DIT).await;
         }
-        Timer::after(2*DIT).await;
+        Timer::after(2 * DIT).await;
         for _ in 0..3 {
             self.all_on();
             Timer::after(DAH).await;
             self.all_off();
             Timer::after(DIT).await;
         }
-        Timer::after(2*DIT).await;
+        Timer::after(2 * DIT).await;
         for _ in 0..3 {
             self.all_on();
             Timer::after(DIT).await;
             self.all_off();
             Timer::after(DIT).await;
         }
-        Timer::after(2*DIT).await;
+        Timer::after(2 * DIT).await;
     }
 }
 
@@ -77,7 +79,23 @@ impl<'a> Leds<'a> {
 pub async fn led_task(mut leds: Leds<'static>) {
     loop {
         match LED_CMD_CHANNEL.receive().await {
+            LedCommand::AllOn => leds.all_on(),
+            LedCommand::OnlyPlay => {
+                leds.all_off();
+                leds.green.set_high();
+            }
             LedCommand::Off => leds.all_off(),
+            LedCommand::InvalidCommand => {
+                leds.sos_once().await;
+            }
+            LedCommand::VolumeUp => {
+                leds.all_off();
+                leds.yellow.set_high();
+            }
+            LedCommand::VolumeDown => {
+                leds.all_off();
+                leds.blue.set_high();
+            }
             LedCommand::Error => {
                 // doesn't break until reboot!
                 loop {

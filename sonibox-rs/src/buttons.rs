@@ -7,7 +7,7 @@ use embassy_time::{Duration, Timer};
 
 use crate::{player::{PlayerCmdSender, PlayerCommand, PLAYER_CMD_CHANNEL}, sleep::{AwakeCmd, AWAKE_SIGNAL}};
 
-const DEBOUNCE_DURATION: Duration = Duration::from_millis(100);
+const DEBOUNCE_DURATION: Duration = Duration::from_millis(200);
 const SECONDARY_ACTION_TIMEOUT: Duration = Duration::from_secs(1);
 
 #[derive(Debug)]

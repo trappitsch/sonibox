@@ -109,6 +109,8 @@ pub async fn player_task(mut uart: BufferedUart<'static, p::UART0>) {
 
     let mut player_status = PlayerStatus::Stopped;
 
+    let mut last_played: Option<u8> = None; // last folder played
+
     info!("Initializing DFPlayer Mini...");
     let mut dfplayer = match DfPlayer::new(
         &mut uart,
@@ -148,6 +150,7 @@ pub async fn player_task(mut uart: BufferedUart<'static, p::UART0>) {
         match PLAYER_CMD_CHANNEL.receive().await {
             PlayerCommand::PlayPause => match player_status {
                 PlayerStatus::Paused => {
+                    LED_CMD_CHANNEL.send(LedCommand::AllOn).await;
                     player_status.play();
                     match dfplayer.resume().await {
                         Ok(_) => info!("Resumed playback."),
@@ -155,6 +158,7 @@ pub async fn player_task(mut uart: BufferedUart<'static, p::UART0>) {
                     }
                 }
                 PlayerStatus::Playing => {
+                    LED_CMD_CHANNEL.send(LedCommand::OnlyPlay).await;
                     player_status.pause();
                     match dfplayer.pause().await {
                         Ok(_) => info!("Paused playback."),
@@ -163,12 +167,15 @@ pub async fn player_task(mut uart: BufferedUart<'static, p::UART0>) {
                 }
                 PlayerStatus::Stopped => {
                     info!("Player is stopped, cannot play/pause.");
+                    LED_CMD_CHANNEL.send(LedCommand::InvalidCommand).await;
                 }
             },
             PlayerCommand::Stop => {
                 player_status.stop();
-                match dfplayer.stop().await {
-                    Ok(_) => info!("Stopped playback."),
+                LED_CMD_CHANNEL.send(LedCommand::Off).await;
+                // status is stopped, but we only pause. If same figure comes again, continue
+                match dfplayer.pause().await {
+                    Ok(_) => info!("Paused playback."),
                     Err(e) => error!("Failed to stop playback: {:?}", Debug2Format(&e)),
                 }
             }
@@ -189,11 +196,24 @@ pub async fn player_task(mut uart: BufferedUart<'static, p::UART0>) {
                 }
             }
             PlayerCommand::PlayFolder(folder) => {
+                LED_CMD_CHANNEL.send(LedCommand::AllOn).await;
                 player_status.play();
-                info!{"Playing folder {}.", folder};
-                match dfplayer.play_loop_folder(folder).await {
-                    Ok(_) => info!("Playing folder {}.", folder),
-                    Err(e) => error!("Failed to play folder {}: {:?}.", folder, Debug2Format(&e)),
+                if last_played == Some(folder) {
+                    // same figure again!
+                    info!("Continue playing with same figure, folder {}.", folder);
+                    match dfplayer.resume().await {
+                        Ok(_) => info!("Resumed playback."),
+                        Err(e) => error!("Failed to resume playback: {:?}", Debug2Format(&e)),
+                    }
+                } else {
+                    info! {"Playing folder {}.", folder};
+                    last_played = Some(folder);
+                    match dfplayer.play_loop_folder(folder).await {
+                        Ok(_) => info!("Playing folder {}.", folder),
+                        Err(e) => {
+                            error!("Failed to play folder {}: {:?}.", folder, Debug2Format(&e))
+                        }
+                    }
                 }
             }
             PlayerCommand::VolumeUp => {
